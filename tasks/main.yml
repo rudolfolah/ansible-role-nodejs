@@ -1,0 +1,46 @@
+---
+- name: Check that the Node.js package was already downloaded
+  ansible.builtin.stat:
+      path: /root/node-v16.15.0-linux-x64.tar.gz
+  register: nodejs_package
+
+- name: Check that the Node.js package was already unpacked
+  ansible.builtin.stat:
+    path: /root/node-v16.15.0-linux-x64
+  register: nodejs_package_dir
+
+- name: Download the Node.js package
+  ansible.builtin.get_url:
+    url: https://nodejs.org/download/release/v16.15.0/node-v16.15.0-linux-x64.tar.gz
+    dest: /root/node-v16.15.0-linux-x64.tar.gz
+  when: not nodejs_package.stat.exists
+
+- name: Unpack the Node.js package
+  ansible.builtin.unarchive:
+    src: /root/node-v16.15.0-linux-x64.tar.gz
+    dest: /root/
+    remote_src: true
+  when: not nodejs_package_dir.stat.exists
+
+- name: Set Node.js binary directory as a variable
+  set_fact:
+    node_bin_path: "/root/node-v16.15.0-linux-x64/bin"
+
+- name: Get current $PATH
+  ansible.builtin.shell: "echo $PATH"
+  register: current_path
+  changed_when: false
+
+- name: Add Node.js binary directory to system-wide $PATH
+  ansible.builtin.lineinfile:
+    dest: /etc/environment
+    regexp: '^PATH='
+    line: "PATH={{ node_bin_path }}:{{ current_path.stdout }}"
+    insertafter: EOF
+    state: present
+    backrefs: yes
+
+- name: Reload environment
+  ansible.builtin.shell: "source /etc/environment"
+  args:
+    executable: /bin/bash
